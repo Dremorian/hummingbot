@@ -64,11 +64,9 @@ class StatusToDbNotifier(NotifierBase):
 
     def add_msg_to_queue(self, msg: str):
         lines: List[str] = msg.split("\n")
-        print(str(lines))
         msg_chunks: List[List[str]] = self._divide_chunks(lines, 30)
         for chunk in msg_chunks:
             self._msg_queue.put_nowait("\n".join(chunk))
-            print(str(chunk))
 
     def add_msg_to_db(self, msg: str):
         session: Session = self._hb.trade_fill_db.get_shared_session()
@@ -82,8 +80,7 @@ class StatusToDbNotifier(NotifierBase):
             data_to_db.status = msg
             data_to_db.timestamp = timestamp
         else:
-            data_to_db = DataToDb(id=1,
-                                  status=msg,
+            data_to_db = DataToDb(status=msg,
                                   timestamp=timestamp, )
             session.add(data_to_db)
         session.commit()
