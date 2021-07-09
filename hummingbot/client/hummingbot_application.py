@@ -32,6 +32,7 @@ from hummingbot.core.utils.trading_pair_fetcher import TradingPairFetcher
 from hummingbot.data_feed.data_feed_base import DataFeedBase
 from hummingbot.notifier.notifier_base import NotifierBase
 from hummingbot.notifier.telegram_notifier import TelegramNotifier
+from hummingbot.notifier.status_to_db_notifier import StatusToDbNotifier
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.connector.markets_recorder import MarketsRecorder
 from hummingbot.client.config.security import Security
@@ -39,6 +40,27 @@ from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.client.settings import CONNECTOR_SETTINGS, ConnectorType
 s_logger = None
 
+# from hummingbot.model.data_to_db import DataToDb
+# import uvicorn
+# from fastapi import FastAPI
+# from multiprocessing import Process
+# from sqlalchemy.orm import (
+#     Session,
+#     Query
+# )
+#
+# app_custom_api = FastAPI()
+#
+# @app_custom_api.get("/data")
+# async def data():
+#     session: Session = SQLConnectionManager.get_trade_fills_instance(db_name='conf_amm_arb_1').get_shared_session()
+#     query: Query = (session
+#                     .query(DataToDb)
+#                     .filter(DataToDb.status != '',
+#                             ))
+#     data_to_db: Optional[DataToDb] = query.one_or_none()
+#
+#     return {"Status": data_to_db.status}
 
 class HummingbotApplication(*commands):
     KILL_TIMEOUT = 10.0
@@ -89,6 +111,7 @@ class HummingbotApplication(*commands):
         self.log_queue_listener: Optional[logging.handlers.QueueListener] = None
         self.data_feed: Optional[DataFeedBase] = None
         self.notifiers: List[NotifierBase] = []
+        self.notifiers_status_to_db: List[NotifierBase] = []
         self.kill_switch: Optional[KillSwitch] = None
         self._app_warnings: Deque[ApplicationWarning] = deque()
         self._trading_required: bool = True
@@ -122,6 +145,10 @@ class HummingbotApplication(*commands):
         self.app.log(msg)
         for notifier in self.notifiers:
             notifier.add_msg_to_queue(msg)
+
+    def _notifiy_status_to_db(self, msg: str):
+        for notifier in self.notifiers_status_to_db:
+            notifier.add_msg_to_db(msg)
 
     def _handle_command(self, raw_command: str):
         # unset to_stop_config flag it triggered before loading any command
@@ -304,5 +331,23 @@ class HummingbotApplication(*commands):
                         hb=self,
                     )
                 )
+        if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers]):
+            StatusToDbNotifierInstance = StatusToDbNotifier(
+                    hb=self
+                )
+            self.notifiers.append(StatusToDbNotifierInstance)
+            if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers_status_to_db]):
+                self.notifiers_status_to_db.append(StatusToDbNotifierInstance)
         for notifier in self.notifiers:
             notifier.start()
+
+# def run_server():
+#     uvicorn.run("hummingbot.client.hummingbot_application:app_custom_api",
+#                 host="0.0.0.0",
+#                 port=9400,
+#                 log_level="info")
+#
+#
+# if __name__ == "hummingbot.client.hummingbot_application":
+#     proc = Process(target=run_server, args=(), daemon=True)
+#     proc.start()

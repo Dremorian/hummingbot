@@ -5,6 +5,9 @@ class NotifierBase:
     def add_msg_to_queue(self, msg: str):
         raise NotImplementedError
 
+    def add_msg_to_db(self, msg: str):
+        raise NotImplementedError
+
     def start(self):
         raise NotImplementedError
 

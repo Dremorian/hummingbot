@@ -6,6 +6,7 @@ from .history_command import HistoryCommand
 from .paper_trade_command import PaperTradeCommand
 from .start_command import StartCommand
 from .status_command import StatusCommand
+from .status_to_db_command import StatusToDbCommand
 from .stop_command import StopCommand
 from .connect_command import ConnectCommand
 from .balance_command import BalanceCommand
@@ -32,6 +33,7 @@ __all__ = [
     PaperTradeCommand,
     StartCommand,
     StatusCommand,
+    StatusToDbCommand,
     StopCommand,
     ConnectCommand,
     BalanceCommand,
