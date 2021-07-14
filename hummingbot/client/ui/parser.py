@@ -102,9 +102,9 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     status_parser.add_argument("--live", default=False, action="store_true", dest="live", help="Show status updates")
     status_parser.set_defaults(func=hummingbot.status)
 
-    status_parser = subparsers.add_parser("status_to_db", help="Get the market status of the current bot")
-    status_parser.add_argument("--live", default=False, action="store_true", dest="live", help="Show status updates")
-    status_parser.set_defaults(func=hummingbot.status_to_db)
+    # status_parser = subparsers.add_parser("status_to_db", help="Get the market status of the current bot")
+    # status_parser.add_argument("--live", default=False, action="store_true", dest="live", help="Show status updates")
+    # status_parser.set_defaults(func=hummingbot.status_to_db)
 
     history_parser = subparsers.add_parser("history", help="See the past performance of the current bot")
     history_parser.add_argument("-d", "--days", type=float, default=0, dest="days",

@@ -317,6 +317,7 @@ class HummingbotApplication(*commands):
             list(self.markets.values()),
             self.strategy_file_name,
             self.strategy_name,
+            self,
         )
         self.markets_recorder.start()
 
@@ -331,13 +332,13 @@ class HummingbotApplication(*commands):
                         hb=self,
                     )
                 )
-        if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers]):
-            StatusToDbNotifierInstance = StatusToDbNotifier(
-                    hb=self
-                )
-            self.notifiers.append(StatusToDbNotifierInstance)
-            if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers_status_to_db]):
-                self.notifiers_status_to_db.append(StatusToDbNotifierInstance)
+        # if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers]):
+        #     StatusToDbNotifierInstance = StatusToDbNotifier(
+        #             hb=self
+        #         )
+        #     self.notifiers.append(StatusToDbNotifierInstance)
+        #     if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers_status_to_db]):
+        #         self.notifiers_status_to_db.append(StatusToDbNotifierInstance)
         for notifier in self.notifiers:
             notifier.start()
 

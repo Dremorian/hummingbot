@@ -53,6 +53,8 @@ class StatusToDbNotifier(NotifierBase):
     async def send_command(self):
         async_scheduler: AsyncCallScheduler = AsyncCallScheduler.shared_instance()
         while True:
+            # status = await self._hb.strategy_status()
+            # print(status)
             await async_scheduler.call_async(self._hb._handle_command, 'status_to_db')
             await asyncio.sleep(10)
 

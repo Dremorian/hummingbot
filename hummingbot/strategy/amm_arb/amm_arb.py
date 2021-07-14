@@ -304,6 +304,111 @@ class AmmArbStrategy(StrategyPyBase):
 
         return "\n".join(lines)
 
+    async def format_status_json(self) -> object:
+        """
+        Returns a status array of objects. Array composes of 4 parts: Markets,
+        Assets, Profitability, Quotes Rates.
+        """
+
+        # if self._arb_proposals is None:
+        #     return {"strategy_on": 1}
+        # columns = ["Exchange", "Market", "Sell Price", "Buy Price", "Mid Price"]
+        data_Markets= []
+        for market_info in [self._market_info_1, self._market_info_2]:
+            market, trading_pair, base_asset, quote_asset = market_info
+            buy_price = await market.get_quote_price(trading_pair, True, self._order_amount)
+            sell_price = await market.get_quote_price(trading_pair, False, self._order_amount)
+
+            # check for unavailable price data
+            buy_price = PerformanceMetrics.smart_round(Decimal(str(buy_price)), 8) if buy_price is not None else '-'
+            sell_price = PerformanceMetrics.smart_round(Decimal(str(sell_price)), 8) if sell_price is not None else '-'
+            mid_price = PerformanceMetrics.smart_round(((buy_price + sell_price) / 2), 8) if '-' not in [buy_price, sell_price] else '-'
+
+            data_Markets.append({
+                "Exchange": market.display_name,
+                "Market": trading_pair,
+                "Sell Price": float(sell_price),
+                "Buy Price": float(buy_price),
+                "Mid Price": float(mid_price),
+            })
+
+        assets_df_json = self.wallet_balance_data_frame_json([self._market_info_1, self._market_info_2])
+
+        profitability = self.short_proposal_json(self._arb_proposals)
+
+        quotes_rates_df_json = self.quotes_rate_df_json()
+        data = {
+            # "strategy_on": 0,
+            "Markets": data_Markets,
+            "Assets": assets_df_json,
+            "Profitability": profitability,
+            "Quotes Rates": quotes_rates_df_json,
+        }
+        return data
+
+    def wallet_balance_data_frame_json(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List:
+        assets_data: list = []
+        # list assets_columns = ["Exchange", "Asset", "Total Balance", "Available Balance"]
+        try:
+            for market_trading_pair_tuple in market_trading_pair_tuples:
+                market, trading_pair, base_asset, quote_asset = market_trading_pair_tuple
+                base_balance = float(market.get_balance(base_asset))
+                quote_balance = float(market.get_balance(quote_asset))
+                available_base_balance = float(market.get_available_balance(base_asset))
+                available_quote_balance = float(market.get_available_balance(quote_asset))
+                # assets_data.extend([
+                #     [market.display_name, base_asset, base_balance, available_base_balance],
+                #     [market.display_name, quote_asset, quote_balance, available_quote_balance]
+                # ])
+                assets_data.append({
+                "Exchange": market.display_name,
+                "Asset": base_asset,
+                "Total Balance": base_balance,
+                "Available Balance": available_base_balance,
+                })
+                assets_data.append({
+                "Exchange": market.display_name,
+                "Asset": quote_asset,
+                "Total Balance": quote_balance,
+                "Available Balance": available_quote_balance,
+                })
+            return assets_data
+
+        except Exception:
+            self.logger().error("Error formatting wallet balance stats.")
+
+    def short_proposal_json(self, arb_proposal: List[ArbProposal], indented: bool = True) -> List:
+        # lines = []
+        data = []
+        for proposal in arb_proposal:
+            side1 = "buy" if proposal.first_side.is_buy else "sell"
+            side2 = "buy" if proposal.second_side.is_buy else "sell"
+            profit_pct = proposal.profit_pct(True,
+                                             rate_source=self._rate_source,
+                                             first_side_quote_eth_rate=self._market_1_quote_eth_rate,
+                                             second_side_quote_eth_rate = self._market_2_quote_eth_rate)
+            # lines.append(f"{'    ' if indented else ''}{side1} at {proposal.first_side.market_info.market.display_name}"
+            #              f", {side2} at {proposal.second_side.market_info.market.display_name}: "
+            #              f"{profit_pct:.2%}")
+            data.append({
+                "Exchange1": proposal.first_side.market_info.market.display_name,
+                "Side Exchange1": side1,
+                "Exchange2": proposal.second_side.market_info.market.display_name,
+                "Side Exchange2": side2,
+                "Profit, %": float(f"{(100*profit_pct):.2f}"),
+            })
+        return data
+
+    def quotes_rate_df_json(self):
+        # columns = ["Quotes pair", "Rate"]
+        quotes_pair = f"{self._market_info_2.quote_asset}-{self._market_info_1.quote_asset}"
+        # data = [[quotes_pair, PerformanceMetrics.smart_round(self._rate_source.rate(quotes_pair))]]
+        data = {
+            "Quotes pair": quotes_pair,
+            "Rate": float(PerformanceMetrics.smart_round(self._rate_source.rate(quotes_pair))),
+        }
+        return data
+
     def did_complete_buy_order(self, order_completed_event):
         self.first_order_done(order_completed_event, True)
 

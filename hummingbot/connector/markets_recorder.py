@@ -44,6 +44,7 @@ from hummingbot.model.range_position_update import RangePositionUpdate
 from hummingbot.model.sql_connection_manager import SQLConnectionManager
 from hummingbot.model.trade_fill import TradeFill
 from hummingbot.model.funding_payment import FundingPayment
+from hummingbot.core.utils.async_utils import safe_ensure_future
 
 
 class MarketsRecorder:
@@ -56,7 +57,8 @@ class MarketsRecorder:
                  sql: SQLConnectionManager,
                  markets: List[ConnectorBase],
                  config_file_path: str,
-                 strategy_name: str):
+                 strategy_name: str,
+                 hb: "hummingbot.client.hummingbot_application.HummingbotApplication" = None):
         if threading.current_thread() != threading.main_thread():
             raise EnvironmentError("MarketsRecorded can only be initialized from the main thread.")
 
@@ -65,6 +67,7 @@ class MarketsRecorder:
         self._markets: List[ConnectorBase] = markets
         self._config_file_path: str = config_file_path
         self._strategy_name: str = strategy_name
+        self._hb = hb
         # Internal collection of trade fills in connector will be used for remote/local history reconciliation
         for market in self._markets:
             trade_fills = self.get_trades_for_config(self._config_file_path, 2000)
@@ -371,6 +374,7 @@ class MarketsRecorder:
             session.add(order_status)
             self.save_market_states(self._config_file_path, market, no_commit=True)
             session.commit()
+            safe_ensure_future(self._hb.strategy_status_to_db(session, order_id, timestamp), loop=self._ev_loop)
         else:
             session.rollback()
 

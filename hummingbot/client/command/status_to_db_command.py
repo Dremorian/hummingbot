@@ -1,5 +1,5 @@
+import inspect
 import pandas as pd
-from typing import List, Dict
 from hummingbot.connector.connector_base import ConnectorBase
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.client.config.global_config_map import global_config_map
@@ -7,6 +7,19 @@ from hummingbot.core.utils.ethereum import check_web3
 from hummingbot.client.config.security import Security
 from hummingbot.client.settings import required_exchanges, ethereum_wallet_required
 from hummingbot.core.utils.async_utils import safe_ensure_future
+from sqlalchemy.orm import (
+    Session,
+    Query
+)
+from hummingbot.model.data_to_db import DataToDb
+from typing import (
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
+import json
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -132,3 +145,30 @@ class StatusToDbCommand:
         self.application_warning()
         self._notifiy_status_to_db("  - All checks: Confirmed.")
         return True
+
+    async def strategy_status_to_db(self, session: Session, order_id: str, timestamp: int):
+        # if inspect.iscoroutinefunction(self.strategy.format_status):
+        #     st_status = await self.strategy.format_status()
+        # else:
+        #     st_status = self.strategy.format_status()
+        if inspect.iscoroutinefunction(self.strategy.format_status_json):
+            st_status_json = await self.strategy.format_status_json()
+        else:
+            st_status_json = self.strategy.format_status_json()
+
+        # status = st_status
+        status = json.dumps(st_status_json)
+        # print(str(st_status))
+        # print(str(st_status_json))
+        data_to_db: Optional[DataToDb] = session.query(DataToDb).filter(DataToDb.order_id == order_id).one_or_none()
+        if data_to_db is not None:
+            data_to_db.order_id = order_id
+            data_to_db.status = status
+            data_to_db.timestamp = timestamp
+        else:
+            data_to_db = DataToDb(order_id=order_id,
+                                  status=status,
+                                  timestamp=timestamp)
+            session.add(data_to_db)
+
+        session.commit()
