@@ -97,6 +97,21 @@ cdef class OrderTracker(TimeIterator):
         return pd.DataFrame(data=limit_orders, columns=["market", "trading_pair", "order_id", "quantity", "timestamp"])
 
     @property
+    def tracked_limit_orders_data_frame_json(self) -> List:
+        limit_orders = [
+            {
+            "market": market_trading_pair_tuple.market.display_name,
+            "trading_pair": market_trading_pair_tuple.trading_pair,
+            "order_id": order_id,
+            "quantity": order.quantity,
+            "timestamp": "n/a" if "//" in order.client_order_id else
+             pd.Timestamp(int(order.client_order_id[-16:]) / 1e6, unit='s', tz='UTC').strftime('%Y-%m-%d %H:%M:%S')
+            }
+            for market_trading_pair_tuple, order_map in self._tracked_limit_orders.items()
+            for order_id, order in order_map.items()]
+        return limit_orders
+
+    @property
     def tracked_market_orders(self) -> List[Tuple[ConnectorBase, MarketOrder]]:
         return [(market_trading_pair_tuple[0], order) for market_trading_pair_tuple, order_map
                 in self._tracked_market_orders.items() for order in order_map.values()]
@@ -110,6 +125,20 @@ cdef class OrderTracker(TimeIterator):
                          for order_id, order in order_map.items()]
 
         return pd.DataFrame(data=market_orders, columns=["market", "trading_pair", "order_id", "quantity", "timestamp"])
+
+    @property
+    def tracked_market_orders_data_frame_json(self) -> List:
+        market_orders = [
+            {
+            "market": market_trading_pair_tuple.market.display_name,
+            "trading_pair": market_trading_pair_tuple.trading_pair,
+            "order_id": order_id,
+            "quantity": order.amount,
+            "timestamp": pd.Timestamp(order.timestamp, unit='s', tz='UTC').strftime('%Y-%m-%d %H:%M:%S')
+            }
+            for market_trading_pair_tuple, order_map in self._tracked_market_orders.items()
+            for order_id, order in order_map.items()]
+        return market_orders
 
     @property
     def in_flight_cancels(self) -> Dict[str, float]:

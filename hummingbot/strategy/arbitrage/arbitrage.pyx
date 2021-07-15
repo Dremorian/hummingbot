@@ -113,8 +113,16 @@ cdef class ArbitrageStrategy(StrategyBase):
         return self._sb_order_tracker.tracked_limit_orders_data_frame
 
     @property
+    def tracked_limit_orders_data_frame_json(self) -> List:
+        return self._sb_order_tracker.tracked_limit_orders_data_frame_json
+
+    @property
     def tracked_market_orders_data_frame(self) -> List[pd.DataFrame]:
         return self._sb_order_tracker.tracked_market_orders_data_frame
+
+    @property
+    def tracked_market_orders_data_frame_json(self) -> List:
+        return self._sb_order_tracker.tracked_market_orders_data_frame_json
 
     def get_second_to_first_conversion_rate(self) -> Tuple[str, Decimal, str, Decimal]:
         """
@@ -164,6 +172,25 @@ cdef class ArbitrageStrategy(StrategyBase):
                 [base_rate_source, base_pair, PerformanceMetrics.smart_round(base_rate)],
             ])
         return pd.DataFrame(data=data, columns=columns)
+
+    def oracle_status_df_json(self):
+        # columns = ["Source", "Pair", "Rate"]
+        data = []
+        quote_pair, quote_rate_source, quote_rate, base_pair, base_rate_source, base_rate = \
+            self.get_second_to_first_conversion_rate()
+        if quote_pair.split("-")[0] != quote_pair.split("-")[1]:
+            data.append({
+                        "Source":quote_rate_source,
+                        "Pair":quote_pair,
+                        "Rate":float(PerformanceMetrics.smart_round(quote_rate))
+                        })
+        if base_pair.split("-")[0] != base_pair.split("-")[1]:
+            data.append({
+                        "Source":quote_rate_source,
+                        "Pair":quote_pair,
+                        "Rate":float(PerformanceMetrics.smart_round(quote_rate))
+                        })
+        return data
 
     def format_status(self) -> str:
         cdef:
@@ -217,6 +244,61 @@ cdef class ArbitrageStrategy(StrategyBase):
             lines.extend(["", "  *** WARNINGS ***"] + warning_lines)
 
         return "\n".join(lines)
+
+    def format_status_json(self) -> object:
+        """
+        Returns a status array of objects. Array composes of 4 parts: Markets,
+        Assets, Profitability, Quotes Rates.
+        """
+        cdef:
+            list lines = []
+            list warning_lines = []
+            list profitability = []
+            list pending = []
+        for market_pair in self._market_pairs:
+
+            markets_df_json = self.market_status_data_frame_json([market_pair.first, market_pair.second])
+
+            oracle_df_json = self.oracle_status_df_json()
+
+            assets_df_json = self.wallet_balance_data_frame_json([market_pair.first, market_pair.second])
+
+            profitability.append({
+                "Exchange1": market_pair.first.market.name,
+                "Side Exchange1": "bid",
+                "Exchange2": market_pair.second.market.name,
+                "Side Exchange2": "ask",
+                "Profit, %": float(round(self._current_profitability[0] * 100, 4)),
+            })
+            profitability.append({
+                "Exchange1": market_pair.first.market.name,
+                "Side Exchange1": "ask",
+                "Exchange2": market_pair.second.market.name,
+                "Side Exchange2": "bid",
+                "Profit, %": float(round(self._current_profitability[1] * 100, 4)),
+            })
+
+            # See if there're any pending limit orders.
+            # tracked_limit_orders = self.tracked_limit_orders
+            # tracked_market_orders = self.tracked_market_orders
+            # quotes_rates_df_json = []
+            # if len(tracked_limit_orders) > 0 or len(tracked_market_orders) > 0:
+            #     tracked_limit_orders_df = self.tracked_limit_orders_data_frame_json
+            #     tracked_market_orders_df = self.tracked_market_orders_data_frame_json
+            #     quotes_rates_df_json = [tracked_limit_orders_df, tracked_limit_orders_df]
+            #     print(tracked_limit_orders_df)
+            #     print(tracked_market_orders_df)
+
+        data = {
+            # "strategy_on": 0,
+            # "Strategy": strategy_name,
+            "Markets": markets_df_json,
+            "Assets": assets_df_json,
+            "Profitability": profitability,
+            "Rate conversion": oracle_df_json,
+            # "Pending limit orders": quotes_rates_df_json,
+        }
+        return data
 
     def notify_hb_app(self, msg: str):
         if self._hb_app_notification:

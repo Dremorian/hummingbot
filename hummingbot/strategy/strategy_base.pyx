@@ -192,6 +192,35 @@ cdef class StrategyBase(TimeIterator):
         except Exception:
             self.logger().error("Error formatting market stats.", exc_info=True)
 
+    def market_status_data_frame_json(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List:
+        cdef:
+            ConnectorBase market
+            str trading_pair
+            str base_asset
+            str quote_asset
+            object bid_price
+            object ask_price
+            # list markets_columns = ["Exchange", "Market", "Best Bid Price", "Best Ask Price", "Mid Price"]
+        try:
+            markets_data: list = []
+            for market_trading_pair_tuple in market_trading_pair_tuples:
+                market, trading_pair, base_asset, quote_asset = market_trading_pair_tuple
+                bid_price = market.get_price(trading_pair, False)
+                ask_price = market.get_price(trading_pair, True)
+                mid_price = (bid_price + ask_price)/2
+                markets_data.append({
+                "Exchange": market.display_name,
+                "Market": trading_pair,
+                "Best Bid Price": float(bid_price),
+                "Best Ask Price": float(ask_price),
+                "Mid Price": float(mid_price),
+                })
+
+            return markets_data
+
+        except Exception:
+            self.logger().error("Error formatting market stats.", exc_info=True)
+
     def wallet_balance_data_frame(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> pd.DataFrame:
         cdef:
             ConnectorBase market
@@ -219,6 +248,37 @@ cdef class StrategyBase(TimeIterator):
 
         except Exception:
             self.logger().error("Error formatting wallet balance stats.", exc_info=True)
+
+    def wallet_balance_data_frame_json(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List:
+        assets_data: list = []
+        # list assets_columns = ["Exchange", "Asset", "Total Balance", "Available Balance"]
+        try:
+            for market_trading_pair_tuple in market_trading_pair_tuples:
+                market, trading_pair, base_asset, quote_asset = market_trading_pair_tuple
+                base_balance = float(market.get_balance(base_asset))
+                quote_balance = float(market.get_balance(quote_asset))
+                available_base_balance = float(market.get_available_balance(base_asset))
+                available_quote_balance = float(market.get_available_balance(quote_asset))
+                # assets_data.extend([
+                #     [market.display_name, base_asset, base_balance, available_base_balance],
+                #     [market.display_name, quote_asset, quote_balance, available_quote_balance]
+                # ])
+                assets_data.append({
+                "Exchange": market.display_name,
+                "Asset": base_asset,
+                "Total Balance": base_balance,
+                "Available Balance": available_base_balance,
+                })
+                assets_data.append({
+                "Exchange": market.display_name,
+                "Asset": quote_asset,
+                "Total Balance": quote_balance,
+                "Available Balance": available_quote_balance,
+                })
+            return assets_data
+
+        except Exception:
+            self.logger().error("Error formatting wallet balance stats.")
 
     def balance_warning(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List[str]:
         cdef:
