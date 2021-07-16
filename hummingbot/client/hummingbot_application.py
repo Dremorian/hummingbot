@@ -132,8 +132,9 @@ class HummingbotApplication(*commands):
     @strategy_file_name.setter
     def strategy_file_name(self, value: str):
         self._strategy_file_name = value
-        db_name = value.split(".")[0]
-        self.trade_fill_db = SQLConnectionManager.get_trade_fills_instance(db_name=db_name)
+        # db_name = value.split(".")[0]
+        # self.trade_fill_db = SQLConnectionManager.get_trade_fills_instance(db_name=db_name)
+        self.trade_fill_db = SQLConnectionManager.get_trade_fills_instance(db_name=global_config_map.get("db_name").value)
 
     @property
     def strategy_config_map(self):
