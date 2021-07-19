@@ -529,6 +529,159 @@ cdef class AvellanedaMarketMakingStrategy(StrategyBase):
 
         return "\n".join(lines)
 
+    def format_status_json(self) -> object:
+        cdef:
+            list lines = []
+            list warning_lines = []
+
+        markets_df_json = self.market_status_data_frame_json([self._market_info])
+
+        assets_df_json = self.pure_mm_assets_df_json(True)
+
+        # See if there are any open orders.
+        df_json = []
+        if len(self.active_orders) > 0:
+            df_json = self.active_orders_df_json()
+
+        volatility_pct = self._avg_vol.current_value / float(self.get_price()) * 100.0
+        if all((self._gamma, self._kappa, not isnan(volatility_pct))):
+            lines.extend(["", f"  Strategy parameters:",
+                          f"    risk_factor(\u03B3)= {self._gamma:.5E}",
+                          f"    order_book_depth_factor(\u03BA)= {self._kappa:.5E}",
+                          f"    volatility= {volatility_pct:.3f}%",
+                          f"    time until end of trading cycle= {str(datetime.timedelta(seconds=float(self._time_left)//1e3))}"])
+        strategy_param_json = []
+        volatility_pct = self._avg_vol.current_value / float(self.get_price()) * 100.0
+        if all((self._gamma, self._kappa, not isnan(volatility_pct))):
+            strategy_param_json.append({
+                "risk_factor(\u03B3)": float(f"{self._gamma:.5E}"),
+                "order_book_depth_factor(\u03BA)": float(f"{self._kappa:.5E}"),
+                "volatility, %": float(f"{volatility_pct:.3f}"),
+                "time until end of trading cycle, s": float(self._time_left)//1e3,
+            })
+
+        data = {
+            # "strategy_on": 0,
+            # "Strategy": strategy_name,
+            "Markets": markets_df_json,
+            "Assets": assets_df_json,
+            "Orders": df_json,
+            "Strategy parameters": strategy_param_json,
+        }
+        return data
+
+    def market_status_data_frame_json(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List:
+        markets_data = []
+        # markets_columns = ["Exchange", "Market", "Best Bid", "Best Ask", f"MidPrice"]
+        # markets_columns.append('Reserved Price')
+        market_books = [(self._market_info.market, self._market_info.trading_pair)]
+        for market, trading_pair in market_books:
+            bid_price = market.get_price(trading_pair, False)
+            ask_price = market.get_price(trading_pair, True)
+            ref_price = self.get_price()
+            # markets_data.append([
+            #     market.display_name,
+            #     trading_pair,
+            #     float(bid_price),
+            #     float(ask_price),
+            #     float(ref_price),
+            #     round(self._reserved_price, 5),
+            # ])
+            markets_data.append({
+                "Exchange": market.display_name,
+                "Market": trading_pair,
+                "Best Bid": float(bid_price),
+                "Best Ask": float(ask_price),
+                "MidPrice": float(ref_price),
+                "Reserved Price": float(round(self._reserved_price, 5)),
+            })
+        return markets_data
+
+    def pure_mm_assets_df_json(self, to_show_current_pct: bool) -> List:
+        market, trading_pair, base_asset, quote_asset = self._market_info
+        price = self._market_info.get_mid_price()
+        base_balance = float(market.get_balance(base_asset))
+        quote_balance = float(market.get_balance(quote_asset))
+        available_base_balance = float(market.get_available_balance(base_asset))
+        available_quote_balance = float(market.get_available_balance(quote_asset))
+        base_value = base_balance * float(price)
+        total_in_quote = base_value + quote_balance
+        base_ratio = base_value / total_in_quote if total_in_quote > 0 else 0
+        quote_ratio = quote_balance / total_in_quote if total_in_quote > 0 else 0
+        # data=[
+        #     ["", base_asset, quote_asset],
+        #     ["Total Balance", round(base_balance, 4), round(quote_balance, 4)],
+        #     ["Available Balance", round(available_base_balance, 4), round(available_quote_balance, 4)],
+        #     [f"Current Value ({quote_asset})", round(base_value, 4), round(quote_balance, 4)]
+        # ]
+        data: List = []
+        data.append({
+            "Base Asset": base_asset,
+            "Total Balance": float(round(base_balance, 4)),
+            "Available Balance": float(round(available_base_balance, 4)),
+            f"Current Value ({quote_asset})": float(round(base_value, 4)),
+            "Current %": float(f"{(100*base_ratio):.1f}"),
+        })
+        data.append({
+            "Quote Asset": quote_asset,
+            "Total Balance": float(round(quote_balance, 4)),
+            "Available Balance": float(round(available_quote_balance, 4)),
+            f"Current Value ({quote_asset})": float(round(quote_balance, 4)),
+            "Current %": float(f"{(100*quote_ratio):.1f}"),
+        })
+        return data
+
+    def active_orders_df_json(self) -> List:
+        market, trading_pair, base_asset, quote_asset = self._market_info
+        price = self.get_price()
+        active_orders = self.active_orders
+        no_sells = len([o for o in active_orders if not o.is_buy and o.client_order_id and
+                        not self._hanging_orders_tracker.is_order_id_in_hanging_orders(o.client_order_id)])
+        active_orders.sort(key=lambda x: x.price, reverse=True)
+        # columns = ["Level", "Type", "Price", "Spread", "Amount (Orig)", "Amount (Adj)", "Age"]
+        data = []
+        lvl_buy, lvl_sell = 0, 0
+        for idx in range(0, len(active_orders)):
+            order = active_orders[idx]
+            is_hanging_order = self._hanging_orders_tracker.is_order_id_in_hanging_orders(order.client_order_id)
+            if not is_hanging_order:
+                if order.is_buy:
+                    level = lvl_buy + 1
+                    lvl_buy += 1
+                else:
+                    level = no_sells - lvl_sell
+                    lvl_sell += 1
+            spread = 0 if price == 0 else abs(order.price - price)/price
+            age = "n/a"
+            # // indicates order is a paper order so 'n/a'. For real orders, calculate age.
+            if "//" not in order.client_order_id:
+                age = pd.Timestamp(int(time.time()) - int(order.client_order_id[-16:])/1e6,
+                                   unit='s').strftime('%H:%M:%S')
+            amount_orig = self._order_amount
+            if is_hanging_order:
+                amount_orig = float(order.quantity)
+                level = "hang"
+            # data.append([
+            #     level,
+            #     "buy" if order.is_buy else "sell",
+            #     float(order.price),
+            #     f"{spread:.2%}",
+            #     amount_orig,
+            #     float(order.quantity),
+            #     age
+            # ])
+            data.append({
+                "Level": level,
+                "Type": "buy" if order.is_buy else "sell",
+                "Price": float(order.price),
+                "Spread, %": float(f"{(100*spread):.2f}"),
+                "Amount (Orig)": amount_orig,
+                "Amount (Adj)": float(order.quantity),
+                "Age": age,
+            })
+
+        return data
+
     def execute_orders_proposal(self, proposal: Proposal):
         return self.c_execute_orders_proposal(proposal)
 
