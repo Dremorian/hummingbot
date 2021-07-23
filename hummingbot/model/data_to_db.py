@@ -26,4 +26,4 @@ class DataToDb(HummingbotBase):
 
     def __repr__(self) -> str:
         return f"Data(id='{self.id}', order_id='{self.order_id}', status='{self.status}', " \
-            f"timestamp={self.timestamp}"
+            f"timestamp={self.timestamp})"

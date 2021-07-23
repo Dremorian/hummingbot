@@ -33,6 +33,7 @@ from hummingbot.data_feed.data_feed_base import DataFeedBase
 from hummingbot.notifier.notifier_base import NotifierBase
 from hummingbot.notifier.telegram_notifier import TelegramNotifier
 from hummingbot.notifier.status_to_db_notifier import StatusToDbNotifier
+from hummingbot.notifier.history_to_db_notifier import HistoryToDbNotifier
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.connector.markets_recorder import MarketsRecorder
 from hummingbot.client.config.security import Security
@@ -335,6 +336,11 @@ class HummingbotApplication(*commands):
         #     self.notifiers.append(StatusToDbNotifierInstance)
         #     if not any([isinstance(n, StatusToDbNotifier) for n in self.notifiers_status_to_db]):
         #         self.notifiers_status_to_db.append(StatusToDbNotifierInstance)
+        if not any([isinstance(n, HistoryToDbNotifier) for n in self.notifiers]):
+            HistoryToDbNotifierInstance = HistoryToDbNotifier(
+                    hb=self
+                )
+            self.notifiers.append(HistoryToDbNotifierInstance)
         for notifier in self.notifiers:
             notifier.start()
 

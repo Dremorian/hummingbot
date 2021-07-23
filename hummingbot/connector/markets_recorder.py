@@ -374,7 +374,8 @@ class MarketsRecorder:
             session.add(order_status)
             self.save_market_states(self._config_file_path, market, no_commit=True)
             session.commit()
-            safe_ensure_future(self._hb.strategy_status_to_db(session, order_id, timestamp), loop=self._ev_loop)
+            # Save status to Db Data - Not Need Now
+            # safe_ensure_future(self._hb.strategy_status_to_db(session, order_id, timestamp), loop=self._ev_loop)
         else:
             session.rollback()
 
